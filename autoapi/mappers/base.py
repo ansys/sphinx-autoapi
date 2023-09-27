@@ -309,6 +309,7 @@ class SphinxMapperBase:
         raise NotImplementedError
 
     def output_rst(self, root, source_suffix):
+        render_in_single_page = self.app.config.autoapi_render_in_single_page
         for _, obj in status_iterator(
             self.objects.items(),
             colorize("bold", "[AutoAPI] ") + "Rendering Data... ",
@@ -316,15 +317,40 @@ class SphinxMapperBase:
             verbosity=1,
             stringify_func=(lambda x: x[0]),
         ):
-            rst = obj.render()
+            rst = obj.render(render_in_single_page=render_in_single_page)
             if not rst:
                 continue
 
             detail_dir = obj.include_dir(root=root)
             ensuredir(detail_dir)
             path = os.path.join(detail_dir, f"index{source_suffix}")
+
             with open(path, "wb+") as detail_file:
                 detail_file.write(rst.encode("utf-8"))
+
+                if not render_in_single_page:
+                    continue
+
+                for obj_child in obj.children:
+
+                    if not obj_child.display:
+                        continue
+
+                    if obj_child.type not in render_in_single_page:
+                        continue
+
+                    obj_child_rst = obj_child.render(
+                        render_in_single_page=render_in_single_page
+                    )
+                    if not obj_child_rst:
+                        continue
+
+                    path = os.path.join(
+                        detail_dir, f"{obj_child.name}{source_suffix}"
+                    )
+
+                    with open(path, "wb+") as obj_child_detail_file:
+                        obj_child_detail_file.write(obj_child_rst.encode("utf-8"))
 
         if self.app.config.autoapi_add_toctree_entry:
             self._output_top_rst(root)
